@@ -17,7 +17,14 @@ let settings = {
   autoCheckTasks: false,
   autoSwitchTasks: true,
   alarmSound: 'jgb',
-  volume: 50
+  volume: 50,
+  customSoundData: null,
+  customSoundName: null,
+  sessionCounters: {
+    pomodoro: 0,
+    shortBreak: 0,
+    longBreak: 0
+  }
 };
 
 // Tasks
@@ -40,6 +47,7 @@ function initializeElements() {
   window.startBtn = document.getElementById("startBtn");
   window.phaseNumber = document.getElementById("phaseNumber");
   window.phaseMessage = document.getElementById("phaseMessage");
+  window.timerDisplay = document.querySelector(".timer-display");
   
   // Tab elements
   window.tabs = document.querySelectorAll('.tab');
@@ -48,7 +56,14 @@ function initializeElements() {
   window.settingBtn = document.getElementById("settingBtn");
   window.settingsModal = document.getElementById("settingsModal");
   window.closeSettingsBtn = document.getElementById("closeSettingsBtn");
+  window.saveSettingsBtn = document.getElementById("saveSettingsBtn");
+  window.cancelSettingsBtn = document.getElementById("cancelSettingsBtn");
   window.blocksiteBtn = document.getElementById("blocksiteBtn");
+  
+  // Custom sound elements
+  window.customSoundSection = document.getElementById("customSoundSection");
+  window.customSoundFile = document.getElementById("customSoundFile");
+  window.customSoundName = document.getElementById("customSoundName");
   
   // Task elements
   window.addTaskBtn = document.getElementById("addTaskBtn");
@@ -74,6 +89,8 @@ function setupEventListeners() {
   // Settings modal
   settingBtn.addEventListener("click", openSettings);
   closeSettingsBtn.addEventListener("click", closeSettings);
+  saveSettingsBtn.addEventListener("click", saveAllSettings);
+  cancelSettingsBtn.addEventListener("click", cancelSettings);
   settingsModal.addEventListener("click", (e) => {
     if (e.target === settingsModal) closeSettings();
   });
@@ -83,10 +100,22 @@ function setupEventListeners() {
     chrome.tabs.create({ url: chrome.runtime.getURL("settings/settings.html") });
   });
   
-  // Settings inputs
+  // Custom sound handling
+  document.getElementById('alarmSound').addEventListener('change', (e) => {
+    const customSection = document.getElementById('customSoundSection');
+    if (e.target.value === 'custom') {
+      customSection.style.display = 'block';
+    } else {
+      customSection.style.display = 'none';
+    }
+    settings.alarmSound = e.target.value;
+  });
+  
+  customSoundFile.addEventListener('change', handleCustomSoundUpload);
+  
+  // Settings inputs - updated to handle floating point values
   document.getElementById('pomodoroTime').addEventListener('change', (e) => {
-    settings.pomodoroTime = parseInt(e.target.value);
-    saveSettings();
+    settings.pomodoroTime = parseFloat(e.target.value);
     if (currentMode === 'pomodoro' && !isRunning) {
       currentTime = settings.pomodoroTime * 60;
       updateDisplay();
@@ -94,8 +123,7 @@ function setupEventListeners() {
   });
   
   document.getElementById('shortBreakTime').addEventListener('change', (e) => {
-    settings.shortBreakTime = parseInt(e.target.value);
-    saveSettings();
+    settings.shortBreakTime = parseFloat(e.target.value);
     if (currentMode === 'shortBreak' && !isRunning) {
       currentTime = settings.shortBreakTime * 60;
       updateDisplay();
@@ -103,8 +131,7 @@ function setupEventListeners() {
   });
   
   document.getElementById('longBreakTime').addEventListener('change', (e) => {
-    settings.longBreakTime = parseInt(e.target.value);
-    saveSettings();
+    settings.longBreakTime = parseFloat(e.target.value);
     if (currentMode === 'longBreak' && !isRunning) {
       currentTime = settings.longBreakTime * 60;
       updateDisplay();
@@ -113,38 +140,31 @@ function setupEventListeners() {
   
   document.getElementById('longBreakInterval').addEventListener('change', (e) => {
     settings.longBreakInterval = parseInt(e.target.value);
-    saveSettings();
   });
   
   // Toggle switches
   document.getElementById('autoStartBreaks').addEventListener('change', (e) => {
     settings.autoStartBreaks = e.target.checked;
-    saveSettings();
   });
   
   document.getElementById('autoStartPomodoros').addEventListener('change', (e) => {
     settings.autoStartPomodoros = e.target.checked;
-    saveSettings();
   });
   
   document.getElementById('autoCheckTasks').addEventListener('change', (e) => {
     settings.autoCheckTasks = e.target.checked;
-    saveSettings();
   });
   
   document.getElementById('autoSwitchTasks').addEventListener('change', (e) => {
     settings.autoSwitchTasks = e.target.checked;
-    saveSettings();
   });
   
   document.getElementById('alarmSound').addEventListener('change', (e) => {
     settings.alarmSound = e.target.value;
-    saveSettings();
   });
   
   document.getElementById('volume').addEventListener('change', (e) => {
     settings.volume = parseInt(e.target.value);
-    saveSettings();
   });
   
   // Test sound button
@@ -197,10 +217,13 @@ function startTimer() {
   startBtn.textContent = "PAUSE";
   startBtn.classList.add("pause");
   
+  // Add timer running animation
+  timerDisplay.classList.add("running");
+  
   chrome.runtime.sendMessage({ 
-    action: "START_TIMER",
-    mode: currentMode,
-    time: currentTime
+    action: "START_TIMER", 
+    mode: currentMode, 
+    time: currentTime 
   });
 }
 
@@ -208,6 +231,9 @@ function pauseTimer() {
   isRunning = false;
   startBtn.textContent = "START";
   startBtn.classList.remove("pause");
+  
+  // Remove timer running animation
+  timerDisplay.classList.remove("running");
   
   chrome.runtime.sendMessage({ action: "PAUSE_TIMER" });
 }
@@ -256,20 +282,33 @@ function updateTabAppearance() {
 function updateDisplay() {
   const minutes = Math.floor(currentTime / 60);
   const seconds = currentTime % 60;
-
-    minutesDisplay.textContent = minutes.toString().padStart(2, "0");
-    secondsDisplay.textContent = seconds.toString().padStart(2, "0");
   
-  // Update phase counter
-  phaseNumber.textContent = currentPhase;
+  minutesDisplay.textContent = minutes.toString().padStart(2, '0');
+  secondsDisplay.textContent = seconds.toString().padStart(2, '0');
   
+  // Update phase number based on current mode
+  let phaseCount = 1;
+  switch(currentMode) {
+    case 'pomodoro':
+      phaseCount = settings.sessionCounters.pomodoro + 1; // +1 for current session
+      break;
+    case 'shortBreak':
+      phaseCount = settings.sessionCounters.shortBreak + 1;
+      break;
+    case 'longBreak':
+      phaseCount = settings.sessionCounters.longBreak + 1;
+      break;
+  }
+  phaseNumber.textContent = phaseCount;
+  
+  // Update phase message based on current mode
   let message = "";
   switch(currentMode) {
     case 'pomodoro':
       message = "Time to focus!";
       break;
     case 'shortBreak':
-      message = "Time for a break!";
+      message = "Time for a short break!";
       break;
     case 'longBreak':
       message = "Time for a long break!";
@@ -277,8 +316,76 @@ function updateDisplay() {
   }
   phaseMessage.textContent = message;
   
-  // Update document title for notification
+  // Update browser tab title
   document.title = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")} - Pomofocus`;
+}
+
+function handleCustomSoundUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  // Validate file type
+  const validTypes = ['audio/mp3', 'audio/wav', 'audio/ogg', 'audio/m4a', 'audio/mpeg'];
+  if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|ogg|m4a)$/i)) {
+    alert('Please select a valid audio file (MP3, WAV, OGG, M4A)');
+    return;
+  }
+  
+  // Check file size (max 10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    alert('File size must be less than 10MB');
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    settings.customSoundData = e.target.result;
+    settings.customSoundName = file.name;
+    customSoundName.textContent = file.name;
+    console.log('Custom sound uploaded:', file.name);
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveAllSettings() {
+  // Save all settings at once
+  saveSettings();
+  closeSettings();
+}
+
+function cancelSettings() {
+  // Reload settings from storage to cancel changes
+  loadSettings();
+  closeSettings();
+}
+
+function extractDomain(url) {
+  try {
+    // Remove protocol if present
+    let domain = url.replace(/^https?:\/\//, '');
+    // Remove www. if present
+    domain = domain.replace(/^www\./, '');
+    // Remove path and query parameters
+    domain = domain.split('/')[0];
+    // Remove port if present
+    domain = domain.split(':')[0];
+    return domain.toLowerCase();
+  } catch (error) {
+    return url.toLowerCase();
+  }
+}
+
+function getTimeForMode(mode) {
+  switch(mode) {
+    case 'pomodoro':
+      return Math.round(settings.pomodoroTime * 60);
+    case 'shortBreak':
+      return Math.round(settings.shortBreakTime * 60);
+    case 'longBreak':
+      return Math.round(settings.longBreakTime * 60);
+    default:
+      return Math.round(settings.pomodoroTime * 60);
+  }
 }
 
 function openSettings() {
@@ -373,12 +480,12 @@ function renderTasks() {
     });
   });
   
-  document.querySelectorAll('.delete-task').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const taskId = parseInt(e.target.closest('.task-action-btn').dataset.id);
-      deleteTask(taskId);
+      document.querySelectorAll('.delete-task').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const taskId = parseInt(e.target.closest('.task-action-btn').dataset.id);
+        deleteTask(taskId);
+      });
     });
-  });
 }
 
 function toggleTaskCompletion(taskId) {
@@ -421,7 +528,36 @@ function loadSettings() {
   chrome.storage.sync.get(['pomodoroSettings'], (result) => {
     if (result.pomodoroSettings) {
       settings = { ...settings, ...result.pomodoroSettings };
-  }
+    }
+    
+    // Update UI elements
+    document.getElementById('pomodoroTime').value = settings.pomodoroTime;
+    document.getElementById('shortBreakTime').value = settings.shortBreakTime;
+    document.getElementById('longBreakTime').value = settings.longBreakTime;
+    document.getElementById('longBreakInterval').value = settings.longBreakInterval;
+    document.getElementById('autoStartBreaks').checked = settings.autoStartBreaks;
+    document.getElementById('autoStartPomodoros').checked = settings.autoStartPomodoros;
+    document.getElementById('autoCheckTasks').checked = settings.autoCheckTasks;
+    document.getElementById('autoSwitchTasks').checked = settings.autoSwitchTasks;
+    document.getElementById('alarmSound').value = settings.alarmSound;
+    document.getElementById('volume').value = settings.volume;
+    
+    // Handle custom sound section visibility
+    const customSection = document.getElementById('customSoundSection');
+    if (settings.alarmSound === 'custom') {
+      customSection.style.display = 'block';
+      if (settings.customSoundName) {
+        customSoundName.textContent = settings.customSoundName;
+      }
+    } else {
+      customSection.style.display = 'none';
+    }
+    
+    // Update timer if not running
+    if (!isRunning) {
+      currentTime = getTimeForMode(currentMode);
+      updateDisplay();
+    }
   });
 }
 
@@ -443,8 +579,8 @@ function saveTasks() {
 }
 
 // Listen for messages from background script
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.action === "STATE_UPDATE") {
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.action === "STATE_UPDATE") {
     const oldMode = currentMode;
     isRunning = message.state.isRunning;
     currentTime = message.state.currentTime;
@@ -472,41 +608,44 @@ function saveTasks() {
 });
 
 function handleTimerComplete() {
-  // Auto-check current task if enabled
-  if (settings.autoCheckTasks && currentMode === 'pomodoro') {
-    const currentTask = tasks[currentTaskIndex];
-    if (currentTask && !currentTask.completed) {
-      currentTask.completed = true;
-      saveTasks();
-      renderTasks();
-    }
+  // Update session counters based on completed mode
+  if (currentMode === 'pomodoro') {
+    settings.sessionCounters.pomodoro++;
+  } else if (currentMode === 'shortBreak') {
+    settings.sessionCounters.shortBreak++;
+  } else if (currentMode === 'longBreak') {
+    settings.sessionCounters.longBreak++;
   }
   
-  // Switch to next phase
-  if (currentMode === 'pomodoro') {
-    currentPhase++;
-    
-    // Determine next break type
-    if (currentPhase % settings.longBreakInterval === 0) {
-      switchMode('longBreak');
-    } else {
-      switchMode('shortBreak');
-    }
-    
-    if (settings.autoStartBreaks) {
-      startTimer();
-    }
-  } else {
-    // Break finished, switch to pomodoro
-    switchMode('pomodoro');
-    
-    if (settings.autoStartPomodoros) {
-      startTimer();
-    }
-  }
+  // Save updated session counters
+  saveSettings();
+  
+  // Update display
+  updateDisplay();
+  
+  // Stop timer animation
+  timerDisplay.classList.remove("running");
   
   // Play alarm sound
   playAlarmSound();
+  
+  // Handle task completion if enabled
+  if (settings.autoCheckTasks && currentMode === 'pomodoro') {
+    if (tasks[currentTaskIndex] && !tasks[currentTaskIndex].completed) {
+      toggleTaskCompletion(tasks[currentTaskIndex].id);
+    }
+  }
+  
+  // Auto switch to next task if enabled
+  if (settings.autoSwitchTasks && currentMode === 'pomodoro') {
+    const nextIncompleteIndex = tasks.findIndex((task, index) => 
+      index > currentTaskIndex && !task.completed
+    );
+    if (nextIncompleteIndex !== -1) {
+      currentTaskIndex = nextIncompleteIndex;
+      renderTasks();
+    }
+  }
 }
 
 function playAlarmSound() {
@@ -627,8 +766,8 @@ function playClickSound() {
 }
 
 // Get initial state from background script
-  chrome.runtime.sendMessage({ action: "GET_STATE" }, (response) => {
-    if (response) {
+chrome.runtime.sendMessage({ action: "GET_STATE" }, (response) => {
+  if (response) {
     isRunning = response.isRunning;
     currentTime = response.currentTime;
     currentMode = response.mode || currentMode;

@@ -126,13 +126,30 @@ body.long-break {
   line-height: 1;
   margin: 24px 0;
   text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.timer-display.running {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    text-shadow: 0 4px 16px rgba(255, 255, 255, 0.3), 0 0 20px rgba(255, 255, 255, 0.2);
+  }
+  100% {
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  }
 }
 
 /* Start Button */
 .start-btn {
-  background: white;
-  color: #d73527;
-  border: none;
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.5);
   padding: 16px 48px;
   font-size: 18px;
   font-weight: 700;
@@ -146,6 +163,7 @@ body.long-break {
 .start-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .start-btn:active {
@@ -635,17 +653,139 @@ input:checked + .slider:before {
 }
 
 /* Responsive adjustments */
-/* @media (max-width: 450px) {
+@media (max-width: 450px) {
   body {
     width: 100vw;
   }
   
   .timer-display {
     font-size: 80px;
-  } */
+  }
   
   .time-inputs {
     flex-direction: column;
     gap: 8px;
   }
+}
+
+/* Custom sound file input */
+.custom-sound-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.file-input-wrapper {
+  position: relative;
+  overflow: hidden;
+  display: inline-block;
+}
+
+.file-input-wrapper input[type=file] {
+  position: absolute;
+  left: -9999px;
+}
+
+.file-input-label {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: white;
+  transition: background 0.2s ease;
+}
+
+.file-input-label:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.custom-sound-name {
+  font-size: 12px;
+  opacity: 0.8;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Session counters */
+.session-counters {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.session-counter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-counter-icon {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.session-counter.pomodoro .session-counter-icon {
+  background: #ff6b6b;
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.4);
+}
+
+.session-counter.break .session-counter-icon {
+  background: #4ecdc4;
+  box-shadow: 0 0 8px rgba(78, 205, 196, 0.4);
+}
+
+.session-counter.long-break .session-counter-icon {
+  background: #45b7d1;
+  box-shadow: 0 0 8px rgba(69, 183, 209, 0.4);
+}
+
+/* Settings buttons */
+.settings-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 20px 0 0 0;
+  margin-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.settings-buttons .cancel-btn,
+.settings-buttons .save-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings-buttons .cancel-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.settings-buttons .cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.settings-buttons .save-btn {
+  background: white;
+  color: #d73527;
+}
+
+.settings-buttons .save-btn:hover {
+  background: rgba(255, 255, 255, 0.9);
 }

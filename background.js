@@ -15,7 +15,14 @@ let settings = {
   autoCheckTasks: false,
   autoSwitchTasks: true,
   alarmSound: 'jgb',
-  volume: 50
+  volume: 50,
+  customSoundData: null,
+  customSoundName: null,
+  sessionCounters: {
+    pomodoro: 0,
+    shortBreak: 0,
+    longBreak: 0
+  }
 };
 
 // Load settings on startup
@@ -123,13 +130,13 @@ function resetTimer() {
 function getTimeForMode(mode) {
   switch(mode) {
     case 'pomodoro':
-      return settings.pomodoroTime * 60;
+      return Math.round(settings.pomodoroTime * 60);
     case 'shortBreak':
-      return settings.shortBreakTime * 60;
+      return Math.round(settings.shortBreakTime * 60);
     case 'longBreak':
-      return settings.longBreakTime * 60;
+      return Math.round(settings.longBreakTime * 60);
     default:
-      return settings.pomodoroTime * 60;
+      return Math.round(settings.pomodoroTime * 60);
   }
 }
 
@@ -166,7 +173,9 @@ function completeTimer() {
 }
 
 function handlePhaseTransition() {
+  // Update session counters based on completed mode
   if (currentMode === 'pomodoro') {
+    settings.sessionCounters.pomodoro++;
     // Pomodoro finished, determine break type
     const isLongBreak = currentPhase % settings.longBreakInterval === 0;
     currentMode = isLongBreak ? 'longBreak' : 'shortBreak';
@@ -176,6 +185,13 @@ function handlePhaseTransition() {
       startTimer(currentMode, currentTime);
     }
   } else {
+    // Update break counters
+    if (currentMode === 'shortBreak') {
+      settings.sessionCounters.shortBreak++;
+    } else if (currentMode === 'longBreak') {
+      settings.sessionCounters.longBreak++;
+    }
+    
     // Break finished, switch to pomodoro
     currentPhase++;
     currentMode = 'pomodoro';
@@ -185,6 +201,9 @@ function handlePhaseTransition() {
       startTimer(currentMode, currentTime);
     }
   }
+  
+  // Save updated session counters
+  chrome.storage.sync.set({ pomodoroSettings: settings });
   
   // Update storage and broadcast new state
   chrome.storage.local.set({ 
@@ -244,29 +263,32 @@ function showNotification() {
 
 async function playAlarmSound(sound, volume) {
   try {
-    // Use current settings if no sound specified
-    const currentSound = sound || settings.alarmSound;
-    const currentVolume = volume || settings.volume;
+    console.log("Playing alarm sound:", sound, "Volume:", volume);
     
-    console.log("Playing alarm sound:", currentSound, "at volume:", currentVolume);
-    
-    // Try to use content script to play sound in active tab
+    // Get current active tab
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    
     if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, { 
-        action: "PLAY_ALARM_SOUND", 
-        sound: currentSound, 
-        volume: currentVolume 
-      }).catch(() => {
-        // If content script fails, fallback to notification with multiple alerts
-        playFallbackAlarm(currentSound, currentVolume);
-      });
-    } else {
-      playFallbackAlarm(currentSound, currentVolume);
+      // Handle custom sound
+      if (sound === 'custom' && settings.customSoundData) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: "PLAY_CUSTOM_ALARM",
+          soundData: settings.customSoundData,
+          volume: volume / 100
+        });
+      } else {
+        // Use predefined sounds
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: "PLAY_ALARM",
+          sound: sound,
+          volume: volume / 100
+        });
+      }
     }
   } catch (error) {
-    // Fallback to notification-based alarm
-    playFallbackAlarm(settings.alarmSound, settings.volume);
+    console.error("Error playing alarm sound:", error);
+    // Fallback to system notification sound
+    playFallbackAlarm(sound, volume);
   }
 }
 

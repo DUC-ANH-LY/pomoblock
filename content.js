@@ -62,17 +62,46 @@ function createMotivationalVideo() {
   });
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log("Content script received message:", message);
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log("Content script received message:", request.action);
   
-  if (message.action === "SHOW_VIDEO") {
-    createMotivationalVideo();
-  } else if (message.action === "PLAY_ALARM_SOUND") {
-    console.log("🔊 ALARM SOUND REQUEST - Sound:", message.sound, "Volume:", message.volume);
-    playAlarmSound(message.sound, message.volume);
-  } else if (message.action === "TEST_ALARM") {
-    testAlarmSound();
+  switch (request.action) {
+    case "PLAY_ALARM":
+      console.log("Playing alarm sound:", request.sound);
+      playAlarmSound(request.sound, request.volume);
+      sendResponse({ success: true });
+      break;
+      
+    case "PLAY_CUSTOM_ALARM":
+      console.log("Playing custom alarm sound");
+      playCustomAlarmSound(request.soundData, request.volume);
+      sendResponse({ success: true });
+      break;
+      
+    case "PLAY_ALARM_SOUND":
+      console.log("Playing alarm sound (legacy):", request.sound);
+      playAlarmSound(request.sound, request.volume);
+      sendResponse({ success: true });
+      break;
+      
+    case "TEST_ALARM":
+      console.log("Testing alarm sound");
+      testAlarmSound();
+      sendResponse({ success: true });
+      break;
+      
+    case "BLOCK_SITES":
+      console.log("Checking site blocking...");
+      checkSiteBlocking();
+      sendResponse({ success: true });
+      break;
+      
+    default:
+      console.log("Unknown action:", request.action);
+      sendResponse({ success: false, error: "Unknown action" });
   }
+  
+  return true; // Keep message channel open for async response
 });
 
 // Test function to verify alarm works
@@ -268,5 +297,36 @@ function playSpeechAlarm(sound) {
     }
   } catch (error) {
     console.log("Speech synthesis failed:", error);
+  }
+}
+
+function playCustomAlarmSound(soundData, volume = 0.5) {
+  console.log("Attempting to play custom alarm sound...");
+  
+  try {
+    // Create audio element from base64 data
+    const audio = new Audio();
+    audio.src = soundData;
+    audio.volume = Math.max(0, Math.min(1, volume));
+    
+    // Play the custom sound
+    const playPromise = audio.play();
+    
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          console.log("✅ Custom alarm sound played successfully");
+        })
+        .catch((error) => {
+          console.error("❌ Custom alarm sound failed:", error);
+          // Fallback to default alarm
+          playAlarmSound('jgb', volume * 100);
+        });
+    }
+    
+  } catch (error) {
+    console.error("❌ Error creating custom audio:", error);
+    // Fallback to default alarm
+    playAlarmSound('jgb', volume * 100);
   }
 }

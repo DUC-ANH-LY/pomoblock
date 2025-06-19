@@ -25,9 +25,28 @@ document.addEventListener("DOMContentLoaded", () => {
     return div;
   }
 
+  function extractDomain(url) {
+    try {
+      // Remove protocol if present
+      let domain = url.replace(/^https?:\/\//, '');
+      // Remove www. if present
+      domain = domain.replace(/^www\./, '');
+      // Remove path and query parameters
+      domain = domain.split('/')[0];
+      // Remove port if present
+      domain = domain.split(':')[0];
+      return domain.toLowerCase();
+    } catch (error) {
+      return url.toLowerCase();
+    }
+  }
+
   addSiteButton.addEventListener("click", () => {
-    const site = newSiteInput.value.trim().toLowerCase();
-    if (site) {
+    const input = newSiteInput.value.trim();
+    if (input) {
+      // Extract domain from the input
+      const site = extractDomain(input);
+      
       chrome.storage.local.get(["blockedSites"], (result) => {
         const blockedSites = result.blockedSites || [];
         if (!blockedSites.includes(site)) {
@@ -35,9 +54,22 @@ document.addEventListener("DOMContentLoaded", () => {
           chrome.storage.local.set({ blockedSites }, () => {
             loadBlockedSites();
             newSiteInput.value = "";
+            // Show user what domain was extracted
+            if (input !== site) {
+              console.log(`Domain extracted: ${input} → ${site}`);
+            }
           });
+        } else {
+          alert(`${site} is already in the blocked sites list.`);
         }
       });
+    }
+  });
+
+  // Also handle Enter key press
+  newSiteInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      addSiteButton.click();
     }
   });
 
