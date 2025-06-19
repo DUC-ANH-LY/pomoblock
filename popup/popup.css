@@ -11,6 +11,16 @@ body {
   background: linear-gradient(135deg, #d73527 0%, #c73e1d 100%);
   color: white;
   user-select: none;
+  transition: background 0.5s ease;
+}
+
+/* Color themes for different modes */
+body.short-break {
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+}
+
+body.long-break {
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
 }
 
 .container {

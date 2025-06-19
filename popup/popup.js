@@ -242,6 +242,15 @@ function updateTabAppearance() {
   if (activeTab) {
     activeTab.classList.add('active');
   }
+  
+  // Update body class for color theme
+  document.body.className = '';
+  if (currentMode === 'shortBreak') {
+    document.body.classList.add('short-break');
+  } else if (currentMode === 'longBreak') {
+    document.body.classList.add('long-break');
+  }
+  // For pomodoro mode, no additional class (uses default red color)
 }
 
 function updateDisplay() {
@@ -434,8 +443,8 @@ function saveTasks() {
 }
 
 // Listen for messages from background script
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.action === "STATE_UPDATE") {
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.action === "STATE_UPDATE") {
     const oldMode = currentMode;
     isRunning = message.state.isRunning;
     currentTime = message.state.currentTime;
