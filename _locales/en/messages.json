@@ -1,0 +1,10 @@
+{
+  "workTime": {
+    "message": "Work time",
+    "description": "The time to work"
+  },
+  "breakTime": {
+    "message": "Break time",
+    "description": "The time to break"
+  }
+}

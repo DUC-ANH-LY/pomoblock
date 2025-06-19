@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Focus Timer Settings</title>
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <div class="settings-container">
+      <h1>Timer Settings</h1>
+      <div class="blocked-sites-section">
+        <h2>Blocked Sites</h2>
+        <div class="setting-group">
+          <label for="newSite"
+            >Add website to block (e.g., facebook.com):</label
+          >
+          <div class="site-input-group">
+            <input
+              type="text"
+              id="newSite"
+              placeholder="Enter website domain"
+            />
+            <button type="button" id="addSite" class="add-button">Add</button>
+          </div>
+        </div>
+        <div class="blocked-sites-list" id="blockedSitesList"></div>
+      </div>
+    </div>
+    <script src="settings.js"></script>
+  </body>
+</html>
