@@ -1,49 +1,638 @@
 import { localizeHtmlPage } from "../utils/translations.js";
 
+// Timer state
+let currentMode = 'pomodoro';
+let currentPhase = 1;
+let isRunning = false;
+let currentTime = 25 * 60; // 25 minutes in seconds
+
+// Settings
+let settings = {
+  pomodoroTime: 25,
+  shortBreakTime: 5,
+  longBreakTime: 15,
+  longBreakInterval: 4,
+  autoStartBreaks: false,
+  autoStartPomodoros: false,
+  autoCheckTasks: false,
+  autoSwitchTasks: true,
+  alarmSound: 'jgb',
+  volume: 50
+};
+
+// Tasks
+let tasks = [];
+let currentTaskIndex = 0;
+
 document.addEventListener("DOMContentLoaded", () => {
   localizeHtmlPage();
-  const startBtn = document.getElementById("startBtn");
-  const pauseBtn = document.getElementById("pauseBtn");
-  const resetBtn = document.getElementById("resetBtn");
-  const minutesDisplay = document.getElementById("minutes");
-  const secondsDisplay = document.getElementById("seconds");
-  const statusDisplay = document.getElementById("status");
+  initializeElements();
+  loadSettings();
+  loadTasks();
+  setupEventListeners();
+  updateDisplay();
+});
 
+function initializeElements() {
+  // Timer elements
+  window.minutesDisplay = document.getElementById("minutes");
+  window.secondsDisplay = document.getElementById("seconds");
+  window.startBtn = document.getElementById("startBtn");
+  window.phaseNumber = document.getElementById("phaseNumber");
+  window.phaseMessage = document.getElementById("phaseMessage");
+  
+  // Tab elements
+  window.tabs = document.querySelectorAll('.tab');
+  
+  // Settings elements
+  window.settingBtn = document.getElementById("settingBtn");
+  window.settingsModal = document.getElementById("settingsModal");
+  window.closeSettingsBtn = document.getElementById("closeSettingsBtn");
+  window.blocksiteBtn = document.getElementById("blocksiteBtn");
+  
+  // Task elements
+  window.addTaskBtn = document.getElementById("addTaskBtn");
+  window.taskModal = document.getElementById("taskModal");
+  window.taskInput = document.getElementById("taskInput");
+  window.saveTaskBtn = document.getElementById("saveTaskBtn");
+  window.cancelTaskBtn = document.getElementById("cancelTaskBtn");
+  window.tasksList = document.getElementById("tasksList");
+}
+
+function setupEventListeners() {
+  // Timer controls
   startBtn.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "START_TIMER" });
+    playClickSound();
+    toggleTimer();
+  });
+  
+  // Tabs
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => switchMode(tab.dataset.mode));
+  });
+  
+  // Settings modal
+  settingBtn.addEventListener("click", openSettings);
+  closeSettingsBtn.addEventListener("click", closeSettings);
+  settingsModal.addEventListener("click", (e) => {
+    if (e.target === settingsModal) closeSettings();
+  });
+  
+  // Blocksite button
+  blocksiteBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("settings/settings.html") });
+  });
+  
+  // Settings inputs
+  document.getElementById('pomodoroTime').addEventListener('change', (e) => {
+    settings.pomodoroTime = parseInt(e.target.value);
+    saveSettings();
+    if (currentMode === 'pomodoro' && !isRunning) {
+      currentTime = settings.pomodoroTime * 60;
+      updateDisplay();
+    }
+  });
+  
+  document.getElementById('shortBreakTime').addEventListener('change', (e) => {
+    settings.shortBreakTime = parseInt(e.target.value);
+    saveSettings();
+    if (currentMode === 'shortBreak' && !isRunning) {
+      currentTime = settings.shortBreakTime * 60;
+      updateDisplay();
+    }
+  });
+  
+  document.getElementById('longBreakTime').addEventListener('change', (e) => {
+    settings.longBreakTime = parseInt(e.target.value);
+    saveSettings();
+    if (currentMode === 'longBreak' && !isRunning) {
+      currentTime = settings.longBreakTime * 60;
+      updateDisplay();
+    }
+  });
+  
+  document.getElementById('longBreakInterval').addEventListener('change', (e) => {
+    settings.longBreakInterval = parseInt(e.target.value);
+    saveSettings();
+  });
+  
+  // Toggle switches
+  document.getElementById('autoStartBreaks').addEventListener('change', (e) => {
+    settings.autoStartBreaks = e.target.checked;
+    saveSettings();
+  });
+  
+  document.getElementById('autoStartPomodoros').addEventListener('change', (e) => {
+    settings.autoStartPomodoros = e.target.checked;
+    saveSettings();
+  });
+  
+  document.getElementById('autoCheckTasks').addEventListener('change', (e) => {
+    settings.autoCheckTasks = e.target.checked;
+    saveSettings();
+  });
+  
+  document.getElementById('autoSwitchTasks').addEventListener('change', (e) => {
+    settings.autoSwitchTasks = e.target.checked;
+    saveSettings();
+  });
+  
+  document.getElementById('alarmSound').addEventListener('change', (e) => {
+    settings.alarmSound = e.target.value;
+    saveSettings();
+  });
+  
+  document.getElementById('volume').addEventListener('change', (e) => {
+    settings.volume = parseInt(e.target.value);
+    saveSettings();
+  });
+  
+  // Test sound button
+  document.getElementById('testSoundBtn').addEventListener('click', async () => {
+    console.log("Testing sound...");
+    
+    // Try to get active tab and send test message
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, { 
+          action: "TEST_ALARM"
+        });
+      }
+    } catch (error) {
+      console.error("Test sound failed:", error);
+    }
+    
+    // Also test direct sound generation in popup
+    testSoundInPopup();
+  });
+  
+  // Task modal
+  addTaskBtn.addEventListener("click", openTaskModal);
+  saveTaskBtn.addEventListener("click", saveTask);
+  cancelTaskBtn.addEventListener("click", closeTaskModal);
+  taskModal.addEventListener("click", (e) => {
+    if (e.target === taskModal) closeTaskModal();
   });
 
-  pauseBtn.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "PAUSE_TIMER" });
+  taskInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") saveTask();
   });
-
-  resetBtn.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "RESET_TIMER" });
+  
+  taskInput.addEventListener("input", () => {
+    saveTaskBtn.disabled = taskInput.value.trim() === "";
   });
+}
 
-  function updateDisplay(state) {
-    const minutes = Math.floor(state.currentTime / 60);
-    const seconds = state.currentTime % 60;
+function toggleTimer() {
+  if (isRunning) {
+    pauseTimer();
+  } else {
+    startTimer();
+  }
+}
+
+function startTimer() {
+  isRunning = true;
+  startBtn.textContent = "PAUSE";
+  startBtn.classList.add("pause");
+  
+  chrome.runtime.sendMessage({ 
+    action: "START_TIMER",
+    mode: currentMode,
+    time: currentTime
+  });
+}
+
+function pauseTimer() {
+  isRunning = false;
+  startBtn.textContent = "START";
+  startBtn.classList.remove("pause");
+  
+  chrome.runtime.sendMessage({ action: "PAUSE_TIMER" });
+}
+
+function switchMode(mode) {
+  if (isRunning) return; // Don't allow switching while running
+  
+  currentMode = mode;
+  
+  // Update tab appearance
+  updateTabAppearance();
+  
+  // Set time based on mode
+  switch(mode) {
+    case 'pomodoro':
+      currentTime = settings.pomodoroTime * 60;
+      break;
+    case 'shortBreak':
+      currentTime = settings.shortBreakTime * 60;
+      break;
+    case 'longBreak':
+      currentTime = settings.longBreakTime * 60;
+      break;
+  }
+  
+  updateDisplay();
+}
+
+function updateTabAppearance() {
+  tabs.forEach(tab => tab.classList.remove('active'));
+  const activeTab = document.querySelector(`[data-mode="${currentMode}"]`);
+  if (activeTab) {
+    activeTab.classList.add('active');
+  }
+}
+
+function updateDisplay() {
+  const minutes = Math.floor(currentTime / 60);
+  const seconds = currentTime % 60;
 
     minutesDisplay.textContent = minutes.toString().padStart(2, "0");
     secondsDisplay.textContent = seconds.toString().padStart(2, "0");
-    statusDisplay.textContent = state.isWorkSession
-      ? chrome.i18n.getMessage("workTime")
-      : chrome.i18n.getMessage("breakTime");
-
-    startBtn.disabled = state.isRunning;
-    pauseBtn.disabled = !state.isRunning;
+  
+  // Update phase counter
+  phaseNumber.textContent = currentPhase;
+  
+  let message = "";
+  switch(currentMode) {
+    case 'pomodoro':
+      message = "Time to focus!";
+      break;
+    case 'shortBreak':
+      message = "Time for a break!";
+      break;
+    case 'longBreak':
+      message = "Time for a long break!";
+      break;
   }
+  phaseMessage.textContent = message;
+  
+  // Update document title for notification
+  document.title = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")} - Pomofocus`;
+}
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.action === "STATE_UPDATE") {
-      updateDisplay(message.state);
+function openSettings() {
+  settingsModal.classList.add("show");
+  
+  // Populate settings
+  document.getElementById('pomodoroTime').value = settings.pomodoroTime;
+  document.getElementById('shortBreakTime').value = settings.shortBreakTime;
+  document.getElementById('longBreakTime').value = settings.longBreakTime;
+  document.getElementById('longBreakInterval').value = settings.longBreakInterval;
+  document.getElementById('autoStartBreaks').checked = settings.autoStartBreaks;
+  document.getElementById('autoStartPomodoros').checked = settings.autoStartPomodoros;
+  document.getElementById('autoCheckTasks').checked = settings.autoCheckTasks;
+  document.getElementById('autoSwitchTasks').checked = settings.autoSwitchTasks;
+  document.getElementById('alarmSound').value = settings.alarmSound;
+  document.getElementById('volume').value = settings.volume;
+}
+
+function closeSettings() {
+  settingsModal.classList.remove("show");
+}
+
+function openTaskModal() {
+  taskModal.classList.add("show");
+  taskInput.value = "";
+  taskInput.focus();
+  saveTaskBtn.disabled = true;
+}
+
+function closeTaskModal() {
+  taskModal.classList.remove("show");
+}
+
+function saveTask() {
+  const taskText = taskInput.value.trim();
+  if (taskText === "") return;
+  
+  const task = {
+    id: Date.now(),
+    text: taskText,
+    completed: false,
+    pomodoros: 0
+  };
+  
+  tasks.push(task);
+  saveTasks();
+  renderTasks();
+  closeTaskModal();
+}
+
+function renderTasks() {
+  tasksList.innerHTML = "";
+  
+  tasks.forEach((task, index) => {
+    const taskElement = document.createElement("div");
+    taskElement.className = "task-item";
+    
+    taskElement.innerHTML = `
+      <div class="task-checkbox ${task.completed ? 'checked' : ''}" data-id="${task.id}"></div>
+      <div class="task-text ${task.completed ? 'completed' : ''}">${task.text}</div>
+      <div class="task-actions">
+        <button class="task-action-btn edit-task" data-id="${task.id}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="m18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+        <button class="task-action-btn delete-task" data-id="${task.id}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3,6 5,6 21,6"/>
+            <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"/>
+          </svg>
+        </button>
+      </div>
+    `;
+    
+    tasksList.appendChild(taskElement);
+  });
+  
+  // Add event listeners for task actions
+  document.querySelectorAll('.task-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('click', (e) => {
+      const taskId = parseInt(e.target.dataset.id);
+      toggleTaskCompletion(taskId);
+    });
+  });
+  
+  document.querySelectorAll('.edit-task').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const taskId = parseInt(e.target.closest('.task-action-btn').dataset.id);
+      editTask(taskId);
+    });
+  });
+  
+  document.querySelectorAll('.delete-task').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const taskId = parseInt(e.target.closest('.task-action-btn').dataset.id);
+      deleteTask(taskId);
+    });
+  });
+}
+
+function toggleTaskCompletion(taskId) {
+  const task = tasks.find(t => t.id === taskId);
+  if (task) {
+    task.completed = !task.completed;
+    saveTasks();
+    renderTasks();
+  }
+}
+
+function editTask(taskId) {
+  const task = tasks.find(t => t.id === taskId);
+  if (task) {
+    taskInput.value = task.text;
+    taskModal.classList.add("show");
+    taskInput.focus();
+    taskInput.select();
+    
+    // Change save button behavior for editing
+    saveTaskBtn.onclick = () => {
+      const newText = taskInput.value.trim();
+      if (newText !== "") {
+        task.text = newText;
+        saveTasks();
+        renderTasks();
+        closeTaskModal();
+      }
+    };
+  }
+}
+
+function deleteTask(taskId) {
+  tasks = tasks.filter(t => t.id !== taskId);
+  saveTasks();
+  renderTasks();
+}
+
+function loadSettings() {
+  chrome.storage.sync.get(['pomodoroSettings'], (result) => {
+    if (result.pomodoroSettings) {
+      settings = { ...settings, ...result.pomodoroSettings };
+  }
+  });
+}
+
+function saveSettings() {
+  chrome.storage.sync.set({ pomodoroSettings: settings });
+}
+
+function loadTasks() {
+  chrome.storage.local.get(['pomodoroTasks'], (result) => {
+    if (result.pomodoroTasks) {
+      tasks = result.pomodoroTasks;
+      renderTasks();
     }
   });
+}
 
+function saveTasks() {
+  chrome.storage.local.set({ pomodoroTasks: tasks });
+}
+
+// Listen for messages from background script
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.action === "STATE_UPDATE") {
+    const oldMode = currentMode;
+    isRunning = message.state.isRunning;
+    currentTime = message.state.currentTime;
+    currentMode = message.state.mode || currentMode;
+    
+    // Update tab highlighting if mode changed
+    if (oldMode !== currentMode) {
+      updateTabAppearance();
+    }
+    
+    if (isRunning) {
+      startBtn.textContent = "PAUSE";
+      startBtn.classList.add("pause");
+    } else {
+      startBtn.textContent = "START";
+      startBtn.classList.remove("pause");
+    }
+    
+    updateDisplay();
+  }
+  
+  if (message.action === "TIMER_COMPLETE") {
+    handleTimerComplete();
+  }
+});
+
+function handleTimerComplete() {
+  // Auto-check current task if enabled
+  if (settings.autoCheckTasks && currentMode === 'pomodoro') {
+    const currentTask = tasks[currentTaskIndex];
+    if (currentTask && !currentTask.completed) {
+      currentTask.completed = true;
+      saveTasks();
+      renderTasks();
+    }
+  }
+  
+  // Switch to next phase
+  if (currentMode === 'pomodoro') {
+    currentPhase++;
+    
+    // Determine next break type
+    if (currentPhase % settings.longBreakInterval === 0) {
+      switchMode('longBreak');
+    } else {
+      switchMode('shortBreak');
+    }
+    
+    if (settings.autoStartBreaks) {
+      startTimer();
+    }
+  } else {
+    // Break finished, switch to pomodoro
+    switchMode('pomodoro');
+    
+    if (settings.autoStartPomodoros) {
+      startTimer();
+    }
+  }
+  
+  // Play alarm sound
+  playAlarmSound();
+}
+
+function playAlarmSound() {
+  // This would typically play a sound file based on settings.alarmSound
+  // For now, we'll use the browser's notification sound
+  chrome.runtime.sendMessage({ 
+    action: "PLAY_ALARM", 
+    sound: settings.alarmSound,
+    volume: settings.volume 
+  });
+}
+
+function testSoundInPopup() {
+  try {
+    console.log("Testing sound directly in popup...");
+    
+    // Try playing the actual selected sound file
+    const audio = new Audio();
+    audio.volume = settings.volume / 100;
+    
+    // Map sound names to actual files
+    let soundFile;
+    switch(settings.alarmSound) {
+      case 'jgb':
+        soundFile = 'assets/sounds/jgb.mp3';
+        break;
+      case 'ct':
+        soundFile = 'assets/sounds/ct.mp3';
+        break;
+      case 'tac':
+        soundFile = 'assets/sounds/tac.mp3';
+        break;
+      default:
+        soundFile = 'assets/sounds/jgb.mp3';
+    }
+    
+    audio.src = chrome.runtime.getURL(soundFile);
+    audio.play().then(() => {
+      console.log("Test sound played successfully:", soundFile);
+    }).catch(error => {
+      console.log("Test sound failed, trying fallback:", error);
+      
+      // Fallback to generated sound
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+      
+      const volume = settings.volume / 100 * 0.3;
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.05);
+      gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.3);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+      
+      console.log("Fallback sound test completed");
+    });
+    
+  } catch (error) {
+    console.error("Popup sound test failed:", error);
+  }
+}
+
+function createSimpleWav(samples, sampleRate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  
+  // WAV header
+  const writeString = (offset, string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+  
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    view.setInt16(offset, samples[i] * 0x7FFF, true);
+    offset += 2;
+  }
+  
+  return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+}
+
+function playClickSound() {
+  try {
+    const audio = new Audio();
+    audio.src = chrome.runtime.getURL("assets/sounds/mouse-click.mp3");
+    audio.volume = 0.3; // Keep click sound subtle
+    audio.play().catch(e => console.log("Click sound failed:", e));
+  } catch (error) {
+    console.log("Click sound error:", error);
+  }
+}
+
+// Get initial state from background script
   chrome.runtime.sendMessage({ action: "GET_STATE" }, (response) => {
     if (response) {
-      updateDisplay(response);
+    isRunning = response.isRunning;
+    currentTime = response.currentTime;
+    currentMode = response.mode || currentMode;
+    currentPhase = response.phase || currentPhase;
+    
+    if (isRunning) {
+      startBtn.textContent = "PAUSE";
+      startBtn.classList.add("pause");
     }
-  });
+    
+    // Update active tab
+    updateTabAppearance();
+    
+    updateDisplay();
+  }
 });

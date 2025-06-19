@@ -1,24 +1,248 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Focus Timer</title>
+    <title>Pomofocus</title>
     <link rel="stylesheet" href="popup.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div class="container">
-      <div class="timer">
-        <span id="minutes">25</span>:<span id="seconds">00</span>
+      <div class="header">
+        <div class="logo">
+          <img src="../assets/icon-32.png" alt="Pomofocus">
+          <span>Pomofocus</span>
+        </div>
+        <div class="header-buttons">
+          <button class="header-btn report-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <line x1="9" y1="9" x2="15" y2="9"/>
+              <line x1="9" y1="13" x2="15" y2="13"/>
+              <line x1="9" y1="17" x2="13" y2="17"/>
+            </svg>
+            Report
+          </button>
+          <button class="header-btn setting-btn" id="settingBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="m12 1 0 6m0 6 0 6m11-7-6 0m-6 0-6 0"/>
+            </svg>
+            Setting
+          </button>
+          <button class="header-btn blocksite-btn" id="blocksiteBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="m4.9 4.9 14.2 14.2"/>
+            </svg>
+            Block Sites
+          </button>
+          <button class="header-btn profile-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            Sign In
+          </button>
+          <button class="header-btn menu-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
+        </div>
       </div>
-      <div class="status" id="status">__MSG_workTime__</div>
-      <div class="controls">
-        <button id="startBtn">Start</button>
-        <button id="pauseBtn">Pause</button>
-        <button id="resetBtn">Reset</button>
+
+      <!-- Timer Section -->
+      <div class="timer-section">
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab active" data-mode="pomodoro">Pomodoro</button>
+          <button class="tab" data-mode="shortBreak">Short Break</button>
+          <button class="tab" data-mode="longBreak">Long Break</button>
+        </div>
+
+        <!-- Timer Display -->
+        <div class="timer-display">
+          <span id="minutes">25</span>:<span id="seconds">00</span>
+        </div>
+
+        <!-- Start Button -->
+        <button class="start-btn" id="startBtn">START</button>
+
+        <!-- Phase Counter -->
+        <div class="phase-counter">
+          <div class="phase-number">#<span id="phaseNumber">1</span></div>
+          <div class="phase-message" id="phaseMessage">Time to focus!</div>
+        </div>
       </div>
-      <div class="settings-link">
-        <a href="../settings/settings.html" target="_blank">Settings</a>
+
+      <!-- Tasks Section -->
+      <div class="tasks-section">
+        <div class="tasks-header">
+          <h3>Tasks</h3>
+          <button class="tasks-menu-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="1"/>
+              <circle cx="19" cy="12" r="1"/>
+              <circle cx="5" cy="12" r="1"/>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="tasks-list" id="tasksList">
+          <!-- Tasks will be dynamically added here -->
+        </div>
+        
+        <button class="add-task-btn" id="addTaskBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="16"/>
+            <line x1="8" y1="12" x2="16" y2="12"/>
+          </svg>
+          Add Task
+        </button>
       </div>
     </div>
+
+    <!-- Settings Modal -->
+    <div class="settings-modal" id="settingsModal">
+      <div class="settings-container">
+        <div class="settings-header">
+          <h2>SETTING</h2>
+          <button class="close-btn" id="closeSettingsBtn">×</button>
+        </div>
+        
+        <div class="settings-content">
+          <!-- Timer Settings -->
+          <div class="settings-section">
+            <div class="section-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12,6 12,12 16,14"/>
+              </svg>
+              <span>TIMER</span>
+            </div>
+            
+            <div class="timer-settings">
+              <label>Time (minutes)</label>
+              <div class="time-inputs">
+                <div class="time-input-group">
+                  <label>Pomodoro</label>
+                  <input type="number" id="pomodoroTime" value="25" min="1" max="60">
+                </div>
+                <div class="time-input-group">
+                  <label>Short Break</label>
+                  <input type="number" id="shortBreakTime" value="5" min="1" max="30">
+                </div>
+                <div class="time-input-group">
+                  <label>Long Break</label>
+                  <input type="number" id="longBreakTime" value="15" min="1" max="60">
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <label>Auto Start Breaks</label>
+              <div class="toggle">
+                <input type="checkbox" id="autoStartBreaks">
+                <span class="slider"></span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <label>Auto Start Pomodoros</label>
+              <div class="toggle">
+                <input type="checkbox" id="autoStartPomodoros">
+                <span class="slider"></span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <label>Long Break interval</label>
+              <input type="number" id="longBreakInterval" value="4" min="1" max="10" class="number-input">
+            </div>
+          </div>
+
+          <!-- Task Settings -->
+          <div class="settings-section">
+            <div class="section-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9,11 12,14 22,4"/>
+                <path d="m21,12v7a2,2 0 0,1 -2,2H5a2,2 0 0,1 -2,-2V5a2,2 0 0,1 2,-2h11"/>
+              </svg>
+              <span>TASK</span>
+            </div>
+
+            <div class="setting-item">
+              <label>
+                Auto Check Tasks
+                <span class="info-icon" title="Automatically check off tasks when timer completes">ⓘ</span>
+              </label>
+              <div class="toggle">
+                <input type="checkbox" id="autoCheckTasks">
+                <span class="slider"></span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <label>
+                Auto Switch Tasks
+                <span class="info-icon" title="Automatically switch to next task">ⓘ</span>
+              </label>
+              <div class="toggle">
+                <input type="checkbox" id="autoSwitchTasks" checked>
+                <span class="slider"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sound Settings -->
+          <div class="settings-section">
+            <div class="section-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="m19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              </svg>
+              <span>SOUND</span>
+            </div>
+
+            <div class="setting-item">
+              <label>Alarm Sound</label>
+              <select id="alarmSound" class="sound-select">
+                <option value="jgb">Classic Bell (JGB)</option>
+                <option value="ct">Chimes (CT)</option>
+                <option value="tac">Notification (TAC)</option>
+              </select>
+            </div>
+
+            <div class="setting-item">
+              <label>Volume</label>
+              <input type="range" id="volume" min="0" max="100" value="50" class="volume-slider">
+            </div>
+
+            <div class="setting-item">
+              <label>Test Sound</label>
+              <button id="testSoundBtn" class="test-sound-btn">🔊 Test Alarm</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Input Modal -->
+    <div class="task-modal" id="taskModal">
+      <div class="task-modal-content">
+        <input type="text" id="taskInput" placeholder="What are you working on?" maxlength="100">
+        <div class="task-modal-buttons">
+          <button class="cancel-btn" id="cancelTaskBtn">Cancel</button>
+          <button class="save-btn" id="saveTaskBtn">Save</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="popup.js"></script>
   </body>
 </html>
