@@ -1,36 +1,4 @@
-chrome.storage.onChanged.addListener(function (changes, areaName) {
-  if (changes.workSession) {
-    const { oldValue, newValue } = changes.workSession;
-    if (oldValue !== newValue) {
-      checkIfShouldBlock();
-    }
-  }
-});
 
-async function checkIfShouldBlock() {
-  const { workSession } = await chrome.storage.local.get(["workSession"]);
-
-  if (workSession !== "work") {
-    return;
-  }
-
-  chrome.storage.local.get(["blockedSites"], (result) => {
-    const blockedSites = result.blockedSites || [];
-    const currentUrl = window.location.hostname;
-
-    if (blockedSites.some((blockedSite) => currentUrl.includes(blockedSite))) {
-      document.body.innerHTML = `
-        <div style="text-align: center; padding: 50px; background: #f2f2f2;">
-          <h1>Site Blocked</h1>
-          <p>This site is blocked during your focus session.</p>
-          <p>Keep focusing! 🎯</p>
-        </div>
-      `;
-    }
-  });
-}
-
-checkIfShouldBlock();
 
 function createMotivationalVideo() {
   const videoContainer = document.createElement("div");
@@ -90,11 +58,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ success: true });
       break;
       
-    case "BLOCK_SITES":
-      console.log("Checking site blocking...");
-      checkSiteBlocking();
-      sendResponse({ success: true });
-      break;
+
       
     default:
       console.log("Unknown action:", request.action);

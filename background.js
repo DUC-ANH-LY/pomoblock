@@ -73,31 +73,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
 });
 
-async function takeScreenshot() {
-  try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tabs[0]) {
-      const screenshot = await chrome.tabs.captureVisibleTab();
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      await chrome.downloads.download({
-        url: screenshot,
-        filename: `pomodoro-screenshot-${timestamp}.png`,
-      });
-    }
-  } catch (error) {
-    console.error("Screenshot error:", error);
-  }
-}
+
 
 function startTimer(mode, time) {
   if (!isRunning) {
     if (mode) currentMode = mode;
     if (time) currentTime = time;
     
-    // Take screenshot when starting work session
-    if (currentMode === 'pomodoro') {
-      takeScreenshot();
-    }
+
 
     chrome.storage.local.set({ 
       workSession: currentMode === 'pomodoro' ? "work" : "break",
@@ -108,14 +91,23 @@ function startTimer(mode, time) {
     isRunning = true;
     timer = setInterval(tick, 1000);
 
+    // Update blocking rules when timer starts
+    updateBlockingRules();
+
     broadcastState();
   }
 }
 
 function pauseTimer() {
+  console.log('⏸️ pauseTimer called, isRunning:', isRunning);
   if (isRunning) {
     isRunning = false;
     clearInterval(timer);
+    console.log('⏸️ Timer paused, isRunning now:', isRunning);
+    
+    // Update blocking rules when timer pauses (disable blocking)
+    updateBlockingRules();
+    
     broadcastState();
   }
 }
@@ -124,6 +116,10 @@ function resetTimer() {
   currentTime = getTimeForMode(currentMode);
   isRunning = false;
   clearInterval(timer);
+  
+  // Update blocking rules when timer resets (disable blocking)
+  updateBlockingRules();
+  
   broadcastState();
 }
 
@@ -153,8 +149,9 @@ function completeTimer() {
   isRunning = false;
   clearInterval(timer);
   
-  // Take screenshot when session ends
-  takeScreenshot();
+  // Update blocking rules when timer completes (disable blocking)
+  updateBlockingRules();
+
   
   // Play alarm sound first - use current settings
   console.log("Timer complete - using alarm sound:", settings.alarmSound);
@@ -183,6 +180,9 @@ function handlePhaseTransition() {
     
     if (settings.autoStartBreaks) {
       startTimer(currentMode, currentTime);
+    } else {
+      // Update blocking rules if not auto-starting
+      updateBlockingRules();
     }
   } else {
     // Update break counters
@@ -199,6 +199,9 @@ function handlePhaseTransition() {
     
     if (settings.autoStartPomodoros) {
       startTimer(currentMode, currentTime);
+    } else {
+      // Update blocking rules if not auto-starting
+      updateBlockingRules();
     }
   }
   
@@ -384,6 +387,105 @@ async function injectMotivationalVideo() {
     console.error("Error injecting motivational video:", error);
   }
 }
+// Declarative Net Request Blocking for immediate site blocking
+let blockedSites = [];
+
+// Load blocked sites on startup
+chrome.storage.local.get(['blockedSites'], (result) => {
+  blockedSites = result.blockedSites || [];
+  console.log('Loaded blocked sites:', blockedSites);
+  updateBlockingRules();
+});
+
+// Listen for storage changes to update blocking state
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.blockedSites) {
+    blockedSites = changes.blockedSites.newValue || [];
+    console.log('Updated blocked sites:', blockedSites);
+    updateBlockingRules();
+  }
+});
+
+// Function to check if blocking should be active
+function shouldBlock() {
+  // Only block when Pomodoro timer is running and in work mode
+  const result = isRunning && currentMode === 'pomodoro' && blockedSites.length > 0;
+  console.log('shouldBlock check:', {
+    isRunning,
+    currentMode,
+    blockedSitesCount: blockedSites.length,
+    result
+  });
+  return result;
+}
+
+async function updateBlockingRules() {
+  console.log('🔧 updateBlockingRules called');
+  try {
+    // Remove all existing rules first
+    const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+    const ruleIdsToRemove = existingRules.map(rule => rule.id);
+    
+    console.log('📝 Existing rules to remove:', ruleIdsToRemove.length);
+    
+    if (ruleIdsToRemove.length > 0) {
+      await chrome.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: ruleIdsToRemove
+      });
+      console.log('🗑️ Removed existing rules');
+    }
+
+    // Add new blocking rules only when Pomodoro is actively running
+    if (shouldBlock()) {
+      const newRules = [];
+      
+      blockedSites.forEach((site, index) => {
+        const cleanSite = site.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
+        const blockedPageUrl = chrome.runtime.getURL('blocked.html') + '?site=' + encodeURIComponent(cleanSite);
+        
+        // Create rules for both www and non-www versions
+        newRules.push({
+          id: index * 2 + 1,
+          priority: 1,
+          action: {
+            type: "redirect",
+            redirect: { url: blockedPageUrl }
+          },
+          condition: {
+            urlFilter: `*://${cleanSite}/*`,
+            resourceTypes: ["main_frame"]
+          }
+        });
+        
+        newRules.push({
+          id: index * 2 + 2,
+          priority: 1,
+          action: {
+            type: "redirect",
+            redirect: { url: blockedPageUrl }
+          },
+          condition: {
+            urlFilter: `*://www.${cleanSite}/*`,
+            resourceTypes: ["main_frame"]
+          }
+        });
+      });
+
+      if (newRules.length > 0) {
+        await chrome.declarativeNetRequest.updateDynamicRules({
+          addRules: newRules
+        });
+        console.log('Added blocking rules for active Pomodoro session:', newRules.length);
+      }
+    } else {
+      console.log('Blocking disabled - Pomodoro not running or not in work mode');
+    }
+    
+    console.log('Blocking rules updated successfully');
+  } catch (error) {
+    console.error('Error updating blocking rules:', error);
+  }
+}
 
 // Initialize timer state on startup
 chrome.storage.local.get(['currentMode', 'currentPhase'], (result) => {
@@ -395,3 +497,4 @@ chrome.storage.local.get(['currentMode', 'currentPhase'], (result) => {
   }
   currentTime = getTimeForMode(currentMode);
 });
+

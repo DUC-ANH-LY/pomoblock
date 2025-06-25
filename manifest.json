@@ -6,7 +6,8 @@
   "action": {
     "default_popup": "popup/popup.html"
   },
-  "permissions": ["notifications", "storage", "downloads", "sidePanel"],
+  "permissions": ["notifications", "storage", "sidePanel", "declarativeNetRequest"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },
@@ -20,7 +21,8 @@
         "assets/sounds/mouse-click.mp3",
         "assets/sounds/jgb.mp3",
         "assets/sounds/ct.mp3",
-        "assets/sounds/tac.mp3"
+        "assets/sounds/tac.mp3",
+        "blocked.html"
       ],
       "matches": ["<all_urls>"]
     }

@@ -764,7 +764,6 @@ function playClickSound() {
     console.log("Click sound error:", error);
   }
 }
-
 // Get initial state from background script
 chrome.runtime.sendMessage({ action: "GET_STATE" }, (response) => {
   if (response) {
@@ -784,3 +783,4 @@ chrome.runtime.sendMessage({ action: "GET_STATE" }, (response) => {
     updateDisplay();
   }
 });
+
