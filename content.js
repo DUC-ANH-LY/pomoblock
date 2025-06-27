@@ -294,3 +294,40 @@ function playCustomAlarmSound(soundData, volume = 0.5) {
     playAlarmSound('jgb', volume * 100);
   }
 }
+
+
+function createMotivationalVideo() {
+  const videoContainer = document.createElement("div");
+  videoContainer.style.cssText = `
+    position: fixed;
+    bottom: -20px;
+    right: 0px;
+    z-index: 999999;
+    background: transparent;
+  `;
+
+  const video = document.createElement("video");
+  video.autoplay = true;
+  video.style.cssText = `
+    width: 660px;
+    height: 400px;
+    border-radius: 4px;
+    visibility: visible;
+  `;
+  video.src = chrome.runtime.getURL("assets/do-it.webm");
+
+  videoContainer.appendChild(video);
+
+  document.body.appendChild(videoContainer);
+  video.play();
+
+  video.addEventListener("ended", () => {
+    videoContainer.remove();
+  });
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "SHOW_VIDEO") {
+    createMotivationalVideo();
+  }
+});

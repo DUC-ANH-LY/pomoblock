@@ -31,6 +31,9 @@ let settings = {
 let tasks = [];
 let currentTaskIndex = 0;
 
+// Temporary settings for pending changes
+let tempSettings = {};
+
 document.addEventListener("DOMContentLoaded", () => {
   localizeHtmlPage();
   initializeElements();
@@ -113,58 +116,54 @@ function setupEventListeners() {
   
   customSoundFile.addEventListener('change', handleCustomSoundUpload);
   
-  // Settings inputs - updated to handle floating point values
-  document.getElementById('pomodoroTime').addEventListener('change', (e) => {
-    settings.pomodoroTime = parseFloat(e.target.value);
-    if (currentMode === 'pomodoro' && !isRunning) {
-      currentTime = settings.pomodoroTime * 60;
-      updateDisplay();
-    }
+  // Settings inputs - store temporary values, don't save immediately
+  
+  document.getElementById('pomodoroTime').addEventListener('input', (e) => {
+    tempSettings.pomodoroTime = parseFloat(e.target.value);
   });
   
-  document.getElementById('shortBreakTime').addEventListener('change', (e) => {
-    settings.shortBreakTime = parseFloat(e.target.value);
-    if (currentMode === 'shortBreak' && !isRunning) {
-      currentTime = settings.shortBreakTime * 60;
-      updateDisplay();
-    }
+  document.getElementById('shortBreakTime').addEventListener('input', (e) => {
+    tempSettings.shortBreakTime = parseFloat(e.target.value);
   });
   
-  document.getElementById('longBreakTime').addEventListener('change', (e) => {
-    settings.longBreakTime = parseFloat(e.target.value);
-    if (currentMode === 'longBreak' && !isRunning) {
-      currentTime = settings.longBreakTime * 60;
-      updateDisplay();
-    }
+  document.getElementById('longBreakTime').addEventListener('input', (e) => {
+    tempSettings.longBreakTime = parseFloat(e.target.value);
   });
   
-  document.getElementById('longBreakInterval').addEventListener('change', (e) => {
-    settings.longBreakInterval = parseInt(e.target.value);
+  document.getElementById('longBreakInterval').addEventListener('input', (e) => {
+    tempSettings.longBreakInterval = parseInt(e.target.value);
   });
   
   // Toggle switches
   document.getElementById('autoStartBreaks').addEventListener('change', (e) => {
-    settings.autoStartBreaks = e.target.checked;
+    tempSettings.autoStartBreaks = e.target.checked;
   });
   
   document.getElementById('autoStartPomodoros').addEventListener('change', (e) => {
-    settings.autoStartPomodoros = e.target.checked;
+    tempSettings.autoStartPomodoros = e.target.checked;
   });
   
   document.getElementById('autoCheckTasks').addEventListener('change', (e) => {
-    settings.autoCheckTasks = e.target.checked;
+    tempSettings.autoCheckTasks = e.target.checked;
   });
   
   document.getElementById('autoSwitchTasks').addEventListener('change', (e) => {
-    settings.autoSwitchTasks = e.target.checked;
+    tempSettings.autoSwitchTasks = e.target.checked;
   });
   
   document.getElementById('alarmSound').addEventListener('change', (e) => {
-    settings.alarmSound = e.target.value;
+    tempSettings.alarmSound = e.target.value;
+    // Show/hide custom sound section immediately for UX
+    const customSection = document.getElementById('customSoundSection');
+    if (e.target.value === 'custom') {
+      customSection.style.display = 'block';
+    } else {
+      customSection.style.display = 'none';
+    }
   });
   
-  document.getElementById('volume').addEventListener('change', (e) => {
-    settings.volume = parseInt(e.target.value);
+  document.getElementById('volume').addEventListener('input', (e) => {
+    tempSettings.volume = parseInt(e.target.value);
   });
   
   // Test sound button
@@ -348,13 +347,32 @@ function handleCustomSoundUpload(event) {
 }
 
 function saveAllSettings() {
-  // Save all settings at once
+  // Apply temporary settings to actual settings
+  Object.assign(settings, tempSettings);
+  
+  // Update timer display if needed
+  if (tempSettings.pomodoroTime && currentMode === 'pomodoro' && !isRunning) {
+    currentTime = settings.pomodoroTime * 60;
+    updateDisplay();
+  } else if (tempSettings.shortBreakTime && currentMode === 'shortBreak' && !isRunning) {
+    currentTime = settings.shortBreakTime * 60;
+    updateDisplay();
+  } else if (tempSettings.longBreakTime && currentMode === 'longBreak' && !isRunning) {
+    currentTime = settings.longBreakTime * 60;
+    updateDisplay();
+  }
+  
+  // Clear temporary settings
+  tempSettings = {};
+  
+  // Save all settings to storage
   saveSettings();
   closeSettings();
 }
 
 function cancelSettings() {
-  // Reload settings from storage to cancel changes
+  // Clear temporary settings and reload from storage
+  tempSettings = {};
   loadSettings();
   closeSettings();
 }
@@ -391,7 +409,10 @@ function getTimeForMode(mode) {
 function openSettings() {
   settingsModal.classList.add("show");
   
-  // Populate settings
+  // Clear any temporary settings when opening
+  tempSettings = {};
+  
+  // Populate settings with current values
   document.getElementById('pomodoroTime').value = settings.pomodoroTime;
   document.getElementById('shortBreakTime').value = settings.shortBreakTime;
   document.getElementById('longBreakTime').value = settings.longBreakTime;
@@ -402,6 +423,14 @@ function openSettings() {
   document.getElementById('autoSwitchTasks').checked = settings.autoSwitchTasks;
   document.getElementById('alarmSound').value = settings.alarmSound;
   document.getElementById('volume').value = settings.volume;
+  
+  // Handle custom sound section visibility
+  const customSection = document.getElementById('customSoundSection');
+  if (settings.alarmSound === 'custom') {
+    customSection.style.display = 'block';
+  } else {
+    customSection.style.display = 'none';
+  }
 }
 
 function closeSettings() {
