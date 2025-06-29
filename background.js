@@ -53,9 +53,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       resetTimer();
       break;
     case "GET_STATE":
-      sendResponse({ 
-        isRunning, 
-        currentTime, 
+      sendResponse({
+        isRunning,
+        currentTime,
         mode: currentMode,
         phase: currentPhase
       });
@@ -63,11 +63,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case "PLAY_ALARM":
       playAlarmSound(request.sound, request.volume);
       break;
+    case "PLAY_OFFSCREEN_ALARM":
+      // This is handled by offscreen document
+      break;
+    case "TEST_ALARM_SOUND":
+      playAlarmSound(request.sound || settings.alarmSound, request.volume || settings.volume);
+      sendResponse({ success: true });
+      break;
     case "GET_MOTIVATION":
       getMotivationalPhrase().then(sendResponse);
       return true;
     case "INJECT_VIDEO":
-      injectMotivationalVideo();
+      injectMotivationalVideo().then(() => {
+        sendResponse({ success: true });
+      }).catch((error) => {
+        console.error("Video injection failed:", error);
+        sendResponse({ success: false, error: error.message });
+      });
       return true;
   }
   return true;
@@ -79,18 +91,18 @@ function startTimer(mode, time) {
   if (!isRunning) {
     if (mode) currentMode = mode;
     if (time) currentTime = time;
-    
 
 
-    chrome.storage.local.set({ 
+
+    chrome.storage.local.set({
       workSession: currentMode === 'pomodoro' ? "work" : "break",
       currentMode: currentMode,
       currentPhase: currentPhase
     });
 
     isRunning = true;
+    console.log("start timer", timer);
     timer = setInterval(tick, 1000);
-
     // Update blocking rules when timer starts
     updateBlockingRules();
 
@@ -104,10 +116,10 @@ function pauseTimer() {
     isRunning = false;
     clearInterval(timer);
     console.log('⏸️ Timer paused, isRunning now:', isRunning);
-    
+
     // Update blocking rules when timer pauses (disable blocking)
     updateBlockingRules();
-    
+
     broadcastState();
   }
 }
@@ -116,15 +128,15 @@ function resetTimer() {
   currentTime = getTimeForMode(currentMode);
   isRunning = false;
   clearInterval(timer);
-  
+
   // Update blocking rules when timer resets (disable blocking)
   updateBlockingRules();
-  
+
   broadcastState();
 }
 
 function getTimeForMode(mode) {
-  switch(mode) {
+  switch (mode) {
     case 'pomodoro':
       return Math.round(settings.pomodoroTime * 60);
     case 'shortBreak':
@@ -137,6 +149,7 @@ function getTimeForMode(mode) {
 }
 
 function tick() {
+  console.log("tick", currentTime);
   if (currentTime <= 0) {
     completeTimer();
   } else {
@@ -148,23 +161,23 @@ function tick() {
 function completeTimer() {
   isRunning = false;
   clearInterval(timer);
-  
+
   // Update blocking rules when timer completes (disable blocking)
   updateBlockingRules();
 
-  
+
   // Play alarm sound first - use current settings
   console.log("Timer complete - using alarm sound:", settings.alarmSound);
   playAlarmSound(settings.alarmSound, settings.volume);
-  
+
   // Show notification with a slight delay to ensure alarm plays first
   setTimeout(() => {
     showNotification();
   }, 100);
-  
+
   // Broadcast timer completion
   broadcastTimerComplete();
-  
+
   // Handle automatic phase switching
   handlePhaseTransition();
 }
@@ -177,7 +190,7 @@ function handlePhaseTransition() {
     const isLongBreak = currentPhase % settings.longBreakInterval === 0;
     currentMode = isLongBreak ? 'longBreak' : 'shortBreak';
     currentTime = getTimeForMode(currentMode);
-    
+
     if (settings.autoStartBreaks) {
       startTimer(currentMode, currentTime);
     } else {
@@ -191,12 +204,12 @@ function handlePhaseTransition() {
     } else if (currentMode === 'longBreak') {
       settings.sessionCounters.longBreak++;
     }
-    
+
     // Break finished, switch to pomodoro
     currentPhase++;
     currentMode = 'pomodoro';
     currentTime = getTimeForMode(currentMode);
-    
+
     if (settings.autoStartPomodoros) {
       startTimer(currentMode, currentTime);
     } else {
@@ -204,25 +217,25 @@ function handlePhaseTransition() {
       updateBlockingRules();
     }
   }
-  
+
   // Save updated session counters
   chrome.storage.sync.set({ pomodoroSettings: settings });
-  
+
   // Update storage and broadcast new state
-  chrome.storage.local.set({ 
+  chrome.storage.local.set({
     workSession: currentMode === 'pomodoro' ? "work" : "break",
     currentMode: currentMode,
     currentPhase: currentPhase
   });
-  
+
   broadcastState();
 }
 
 function showNotification() {
   let title = "🍅 Pomofocus - Session Complete!";
   let message = "";
-  
-  switch(currentMode) {
+
+  switch (currentMode) {
     case 'pomodoro':
       message = "🎉 Great job! Time for a break. You've completed a focus session!";
       break;
@@ -233,9 +246,9 @@ function showNotification() {
       message = "💪 Long break's over! You're refreshed and ready to be productive!";
       break;
   }
-  
+
   const notificationId = `pomodoro-${Date.now()}`;
-  
+
   chrome.notifications.create(notificationId, {
     type: "basic",
     iconUrl: "assets/icon-128.png",
@@ -244,12 +257,12 @@ function showNotification() {
     priority: 2,
     requireInteraction: true, // Keep notification visible until user interacts
   });
-  
+
   // Clear the notification after 10 seconds if user doesn't interact
   setTimeout(() => {
     chrome.notifications.clear(notificationId);
   }, 10000);
-  
+
   // Also show a badge on the extension icon
   chrome.action.setBadgeText({
     text: currentMode === 'pomodoro' ? '✓' : '⏰'
@@ -257,82 +270,152 @@ function showNotification() {
   chrome.action.setBadgeBackgroundColor({
     color: currentMode === 'pomodoro' ? '#4CAF50' : '#FF9800'
   });
-  
+
   // Clear badge after 5 seconds
   setTimeout(() => {
-    chrome.action.setBadgeText({text: ''});
+    chrome.action.setBadgeText({ text: '' });
   }, 5000);
 }
 
 async function playAlarmSound(sound, volume) {
   try {
-    console.log("Playing alarm sound:", sound, "Volume:", volume);
-    
-    // Get current active tab
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    
-    if (tabs[0]) {
-      // Handle custom sound
-      if (sound === 'custom' && settings.customSoundData) {
-        chrome.tabs.sendMessage(tabs[0].id, {
-          action: "PLAY_CUSTOM_ALARM",
-          soundData: settings.customSoundData,
-          volume: volume / 100
-        });
-      } else {
-        // Use predefined sounds
-        chrome.tabs.sendMessage(tabs[0].id, {
-          action: "PLAY_ALARM",
-          sound: sound,
-          volume: volume / 100
-        });
-      }
+    console.log("🔔 Playing alarm sound:", sound, "Volume:", volume);
+
+    // Method 1: Try content script in active tab first
+    let soundPlayed = await tryContentScriptSound(sound, volume);
+
+    if (!soundPlayed) {
+      // Method 2: Try offscreen document
+      soundPlayed = await tryOffscreenSound(sound, volume);
     }
+
+    if (!soundPlayed) {
+      // Method 3: Fallback to enhanced notifications
+      console.log("⚠️ Fallback to notification sound");
+      playFallbackAlarm(sound, volume);
+    }
+
   } catch (error) {
-    console.error("Error playing alarm sound:", error);
-    // Fallback to system notification sound
+    console.error("❌ Error in playAlarmSound:", error);
+    // Final fallback to notifications
     playFallbackAlarm(sound, volume);
   }
 }
 
-function playFallbackAlarm(sound, volume) {
-  // Create multiple notification alerts as fallback
-  const alertCount = 3;
-  let alertIndex = 0;
-  
-  function createAlert() {
-    if (alertIndex < alertCount) {
-      const notificationId = `alarm-${Date.now()}-${alertIndex}`;
-      chrome.notifications.create(notificationId, {
-        type: "basic",
-        iconUrl: "assets/icon-128.png",
-        title: `🔔 Timer Alert ${alertIndex + 1}/${alertCount}`,
-        message: `${sound.toUpperCase()} alarm - Session completed!`,
-        priority: 2,
-        requireInteraction: false
+async function tryContentScriptSound(sound, volume) {
+  try {
+    // Get current active tab
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    if (tabs && tabs[0] && tabs[0].url && !tabs[0].url.startsWith('chrome://')) {
+      console.log("🎵 Trying content script sound on tab:", tabs[0].url);
+
+      // Check if we can send messages to this tab
+      const response = await chrome.tabs.sendMessage(tabs[0].id, {
+        action: sound === 'custom' && settings.customSoundData ? "PLAY_CUSTOM_ALARM" : "PLAY_ALARM",
+        sound: sound,
+        soundData: settings.customSoundData,
+        volume: volume / 100
       });
-      
-      // Clear notification after 2 seconds and create next one
+
+      if (response && response.success) {
+        console.log("✅ Content script sound played successfully");
+        return true;
+      }
+    } else {
+      console.log("⚠️ No suitable active tab found for content script");
+    }
+  } catch (error) {
+    console.log("⚠️ Content script sound failed:", error.message);
+  }
+
+  return false;
+}
+
+async function tryOffscreenSound(sound, volume) {
+  try {
+    // Check if offscreen document exists
+    const existingContexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT']
+    });
+
+    if (existingContexts.length === 0) {
+      // Create offscreen document for audio
+      await chrome.offscreen.createDocument({
+        url: chrome.runtime.getURL('offscreen.html'),
+        reasons: ['AUDIO_PLAYBACK'],
+        justification: 'Playing timer alarm sounds'
+      });
+      console.log("🎵 Created offscreen document for audio");
+    }
+
+    // Send message to offscreen document
+    const response = await chrome.runtime.sendMessage({
+      action: "PLAY_OFFSCREEN_ALARM",
+      sound: sound,
+      volume: volume,
+      customSoundData: settings.customSoundData
+    });
+
+    if (response && response.success) {
+      console.log("✅ Offscreen sound played successfully");
+      return true;
+    }
+
+  } catch (error) {
+    console.log("⚠️ Offscreen sound failed:", error.message);
+  }
+
+  return false;
+}
+
+function playFallbackAlarm(sound, volume) {
+  console.log("🔔 Playing fallback notification alarm");
+
+  // Create a more prominent notification with sound
+  const notificationId = `alarm-${Date.now()}`;
+
+  chrome.notifications.create(notificationId, {
+    type: "basic",
+    iconUrl: "assets/icon-128.png",
+    title: "🍅 Pomodoro Timer - Session Complete!",
+    message: `Timer finished! Time for your ${currentMode === 'pomodoro' ? 'break' : 'next session'}.`,
+    priority: 2,
+    requireInteraction: true,  // Keep notification visible until user interaction
+    silent: false  // Allow system notification sound
+  });
+
+  // Create additional visual alerts
+  let blinkCount = 0;
+  const maxBlinks = 6;
+
+  const blinkInterval = setInterval(() => {
+    blinkCount++;
+
+    if (blinkCount <= maxBlinks) {
+      // Update badge to create visual alert
+      chrome.action.setBadgeText({ text: blinkCount % 2 === 0 ? "⏰" : "" });
+      chrome.action.setBadgeBackgroundColor({ color: "#ff4444" });
+    } else {
+      // Clear blinking and notification after alerts
+      clearInterval(blinkInterval);
+      chrome.action.setBadgeText({ text: "" });
+
+      // Auto-clear notification after 10 seconds if user hasn't interacted
       setTimeout(() => {
         chrome.notifications.clear(notificationId);
-        alertIndex++;
-        if (alertIndex < alertCount) {
-          setTimeout(createAlert, 300); // 300ms delay between alerts
-        }
-      }, 2000);
+      }, 10000);
     }
-  }
-  
-  createAlert();
+  }, 500);
 }
 
 async function broadcastState() {
   try {
     await chrome.runtime.sendMessage({
       action: "STATE_UPDATE",
-      state: { 
-        isRunning, 
-        currentTime, 
+      state: {
+        isRunning,
+        currentTime,
         mode: currentMode,
         phase: currentPhase
       }
@@ -373,18 +456,41 @@ async function getMotivationalPhrase() {
     "Time to get things done!",
     "You're making progress!"
   ];
-  
+
   return phrases[Math.floor(Math.random() * phrases.length)];
 }
 
 async function injectMotivationalVideo() {
   try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, { action: "SHOW_MOTIVATION" });
-    }
+    console.log("🎬 Showing motivational notification...");
+
+    // Get a random motivational phrase
+    const motivationalPhrase = await getMotivationalPhrase();
+
+    // Show motivational notification
+    const notificationId = `motivation-${Date.now()}`;
+
+    chrome.notifications.create(notificationId, {
+      type: "basic",
+      iconUrl: "assets/icon-128.png",
+      title: "🎯 Motivation Boost!",
+      message: motivationalPhrase,
+      priority: 1,
+      requireInteraction: false,
+      silent: false
+    });
+
+    // Auto-clear notification after 5 seconds
+    setTimeout(() => {
+      chrome.notifications.clear(notificationId);
+    }, 5000);
+
+    console.log("✅ Motivational notification shown successfully");
+    return { success: true };
+
   } catch (error) {
-    console.error("Error injecting motivational video:", error);
+    console.error("❌ Error showing motivational notification:", error);
+    throw error;
   }
 }
 // Declarative Net Request Blocking for immediate site blocking
@@ -425,9 +531,9 @@ async function updateBlockingRules() {
     // Remove all existing rules first
     const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
     const ruleIdsToRemove = existingRules.map(rule => rule.id);
-    
+
     console.log('📝 Existing rules to remove:', ruleIdsToRemove.length);
-    
+
     if (ruleIdsToRemove.length > 0) {
       await chrome.declarativeNetRequest.updateDynamicRules({
         removeRuleIds: ruleIdsToRemove
@@ -438,11 +544,11 @@ async function updateBlockingRules() {
     // Add new blocking rules only when Pomodoro is actively running
     if (shouldBlock()) {
       const newRules = [];
-      
+
       blockedSites.forEach((site, index) => {
         const cleanSite = site.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
         const blockedPageUrl = chrome.runtime.getURL('blocked.html') + '?site=' + encodeURIComponent(cleanSite);
-        
+
         // Create rules for both www and non-www versions
         newRules.push({
           id: index * 2 + 1,
@@ -456,7 +562,7 @@ async function updateBlockingRules() {
             resourceTypes: ["main_frame"]
           }
         });
-        
+
         newRules.push({
           id: index * 2 + 2,
           priority: 1,
@@ -480,7 +586,7 @@ async function updateBlockingRules() {
     } else {
       console.log('Blocking disabled - Pomodoro not running or not in work mode');
     }
-    
+
     console.log('Blocking rules updated successfully');
   } catch (error) {
     console.error('Error updating blocking rules:', error);

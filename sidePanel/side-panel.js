@@ -11,15 +11,49 @@ document.getElementById("getMotivation").addEventListener("click", async () => {
       quotes[randomIndex].q;
   } catch (error) {
     console.error("Error getting motivation:", error);
+    document.getElementById("motivationText").textContent =
+      "Stay focused and productive! You've got this!";
   }
 });
 
 document.getElementById("getVideo").addEventListener("click", async () => {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, {
-        action: "INJECT_VIDEO",
-      });
+  try {
+    console.log("🎯 Requesting motivation boost...");
+
+    // Send message to background script to show notification
+    const response = await chrome.runtime.sendMessage({
+      action: "INJECT_VIDEO"
+    });
+
+    if (response && response.success) {
+      console.log("✅ Motivation boost sent successfully");
+
+      // Show feedback in the panel
+      const motivationText = document.getElementById("motivationText");
+      motivationText.textContent = "🎯 Motivation boost sent! Check your notifications.";
+      motivationText.style.color = "#4caf50";
+
+      // Reset after 3 seconds
+      setTimeout(() => {
+        motivationText.style.color = "";
+        motivationText.textContent = "";
+      }, 3000);
+
+    } else {
+      console.log("⚠️ Motivation boost may have failed");
     }
-  });
+
+  } catch (error) {
+    console.error("❌ Error sending motivation boost:", error);
+
+    // Show user-friendly error message
+    const motivationText = document.getElementById("motivationText");
+    motivationText.textContent = "Unable to send motivation boost. Please try again.";
+    motivationText.style.color = "#ff6b6b";
+
+    // Reset color after 3 seconds
+    setTimeout(() => {
+      motivationText.style.color = "";
+    }, 3000);
+  }
 });

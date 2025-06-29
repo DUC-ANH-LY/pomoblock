@@ -6,7 +6,7 @@
   "action": {
     "default_popup": "popup/popup.html"
   },
-  "permissions": ["notifications", "storage", "sidePanel", "declarativeNetRequest"],
+  "permissions": ["tabs", "activeTab", "notifications", "storage", "sidePanel", "declarativeNetRequest", "offscreen"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
@@ -26,7 +26,9 @@
         "assets/sounds/ct.mp3",
         "assets/sounds/tac.mp3",
         "blocked.html",
-        "blocked.js"
+        "blocked.js",
+        "offscreen.html",
+        "offscreen.js"
       ],
       "matches": ["<all_urls>"]
     }
