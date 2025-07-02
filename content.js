@@ -46,19 +46,7 @@ function testAlarmSound() {
 // Function to play alarm sounds with multiple approaches
 function playAlarmSound(sound, volume) {
   console.log("Playing alarm sound:", sound, "at volume:", volume);
-
-  // Method 1: Try playing actual sound files (most reliable)
-  playActualSoundFile(sound, volume);
-
-  // // Method 2: Try Web Audio API as backup
-  // setTimeout(() => {
-  //   playWebAudioSound(sound, volume);
-  // }, 100);
-
-  // // Method 3: Try SpeechSynthesis as final fallback
-  // setTimeout(() => {
-  //   playSpeechAlarm(sound);
-  // }, 500);
+  playWebAudioSound(sound, volume);
 }
 
 function playActualSoundFile(sound, volume) {
@@ -218,20 +206,6 @@ function playWebAudioSound(sound, volume) {
   }
 }
 
-function playSpeechAlarm(sound) {
-  try {
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance();
-      utterance.text = `${sound} alarm. Timer completed.`;
-      utterance.rate = 1.5;
-      utterance.volume = 0.7;
-      speechSynthesis.speak(utterance);
-      console.log("Speech synthesis alarm played");
-    }
-  } catch (error) {
-    console.log("Speech synthesis failed:", error);
-  }
-}
 
 function playCustomAlarmSound(soundData, volume = 0.5) {
   console.log("Attempting to play custom alarm sound...");
